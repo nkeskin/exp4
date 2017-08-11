@@ -12,6 +12,7 @@
 #include <nav_msgs/GetPlan.h>
 #include <std_msgs/Int8.h>
 #include <thread>
+#include <cstring>
 
 using namespace std;
 
@@ -34,7 +35,8 @@ vector<double> robotCoordI;
 vector<double> robotCoordJ;
 vector<geometry_msgs::PoseStamped> pos;
 geometry_msgs::PoseStamped p;
-string service_name = "/move_base_node/NavfnROS/make_plan";
+
+//string service_name = "/move_base_node/NavfnROS/make_plan";
 ros::ServiceClient serviceClient;
 nav_msgs::GetPlan srv;
 
@@ -43,7 +45,6 @@ double  res; // Haritanin resolution bilgisi
 double  map2DOrigX,map2DOrigY; // Haritanin orijin bilgisi
 double  robotX,robotY,robotYaw; // Robotun X ve Y koordinatlari
 int     robotIIndex,robotJIndex; //Robotun haritada hangi indise denk geldiğini tutuan degişkenler
-double  distan = 1.5; // Taranacak alanin yari genişliği, cok yuksek olmasi durumunda seg_fault verebilmektedir
 double  X1,X2,X3,X4; //Alan taramai icin gerekli degiskenler
 double  Y1,Y2,Y3,Y4; // Alan taramai icin gerekli degiskenler
 int     x1_j,x2_j,x3_j,x4_j; //Alan taramai icin gerekli degiskenler
@@ -62,11 +63,28 @@ int     steps = 0;
 double  goalYaw = 0;
 double  _x,_y;
 bool    firstExp4 = false;
-int     lastAreaThreshold = 115;
 int     totalArea = 0;
 double  firstGoalX = 0,firstGoalY = 0;
 double  lastGoalX = 0, lastGoalY = 0;
 int     backCnt = 0;
+
+
+double  distan = 1.5; // Taranacak alanin yari genişliği
+int     lastAreaThreshold = 115;
+string  service_name = "/move_base_node/NavfnROS/make_plan";
+string  picture_place = "/home/exp4/catkin_ws/src/navigator_exp4/";
+int 	compute_loop_rate = 10;
+double  treshold_to_goal = 0.4;
+double  treshold_to_stop = 0.15;
+double  angle_to_goal = 0.1;
+string  picture_name = "out.pgm";
+bool   	paint_robot_coords = false;
+bool	paint_file = false;
+string  map_topic = "/exp4_map";
+string  base_topic = "/base_link";
+string  cmd_topic = "/cmd_vel";
+string  status_topic = "/move_base/status";
+string  cancel_topic = "/move_base/cancel";
 
 
 
@@ -341,22 +359,25 @@ void markMap(int **map){
 
 //Haritayi, hedefleri ve alan taramasini resim olarak yazdiran fonksiyon
 void paintFile(int **map){
-    FILE *f = fopen("/home/monster/catkin_ws/src/navigator_exp4/out.pgm", "wb");
+    string picture = picture_place + picture_name;
+    FILE *f = fopen(picture.c_str(), "wb");
     fprintf(f, "P6\n%i %i 255\n", width, height);
 
     for (int i=0; i<height; i++){
         for (int j=0;j<width;j++){
-            /*int skip = 0;
-            for(uint k = 0; k < robotCoordI.size(); k++){//Robotun gectigi yerleri isaretleyen kisim
-                if((i == convertToIndexI(robotCoordI[k])) && (j == convertToIndexJ(robotCoordJ[k]))){
-                    fputc(255, f);
-                    fputc(0, f);
-                    fputc(0, f);
-                    skip = 1;
-                    k = robotCoordI.size();
-                }
-            }*/
-            //if(skip == 0){
+            int skip = 0;
+            if(paint_robot_coords){
+            	for(uint k = 0; k < robotCoordI.size(); k++){//Robotun gectigi yerleri isaretleyen kisim
+	                if((i == convertToIndexI(robotCoordI[k])) && (j == convertToIndexJ(robotCoordJ[k]))){
+	                    fputc(255, f);
+	                    fputc(0, f);
+	                    fputc(0, f);
+	                    skip = 1;
+	                    k = robotCoordI.size();
+	                }
+            	}
+            }
+            if(skip == 0){
             if((i == convertToIndexI(goalY)) && (j == convertToIndexJ(goalX))){//Hedef mor ile renklendirildi
                 fputc(75, f);
                 fputc(0, f);
@@ -365,7 +386,7 @@ void paintFile(int **map){
                 fputc(0, f);
                 fputc(255, f);
                 fputc(0, f);
-            }/*else if((i == y1_i) && (j == x1_j)){//1. nokta mavi ile renklendirildi
+            }else if((i == y1_i) && (j == x1_j)){//1. nokta mavi ile renklendirildi
                     fputc(0, f);
                     fputc(0, f);
                     fputc(255, f);
@@ -381,7 +402,7 @@ void paintFile(int **map){
                     fputc(0, f);
                     fputc(255, f);
                     fputc(0, f);
-                }*/else if(map[i][j] == 0){ // Gezilebilir alan beyaz ile renklendirildi
+                }else if(map[i][j] == 0){ // Gezilebilir alan beyaz ile renklendirildi
                 fputc(255, f);
                 fputc(255, f);
                 fputc(255, f);
@@ -402,7 +423,8 @@ void paintFile(int **map){
                 fputc(55, f);
                 fputc(55, f);
             }
-            //}
+            
+           }
         }
     }
 
@@ -450,13 +472,14 @@ void doComputeMarkPaint(int **mapData){
     */
 
     //Robotun gectigi yerlerin resimde cikmasi saglaniyor
-    //robotCoordI.push_back(goalX);
-    //robotCoordJ.push_back(goalY);
+    robotCoordI.push_back(goalX);
+    robotCoordJ.push_back(goalY);
 
     //cout << "goalX: " << goalX << " - goalY: "  << goalY << endl;
 
     //Resim yazdiriliyor
-    paintFile(mapData);
+    if(paint_file)
+    	paintFile(mapData);
 
 }
 
@@ -530,7 +553,7 @@ bool callPlanningService(ros::ServiceClient &serviceClient)
             for(uint i = 0;i < srv.response.plan.poses.size();i++) {
                 robotCoordI.push_back(srv.response.plan.poses.at(i).pose.position.y);
                 robotCoordJ.push_back(srv.response.plan.poses.at(i).pose.position.x);
-                cout << "poseX - poseY : "  << srv.response.plan.poses.at(i).pose.position.x << "  -  " << srv.response.plan.poses.at(i).pose.position.y << endl;
+                //cout << "poseX - poseY : "  << srv.response.plan.poses.at(i).pose.position.x << "  -  " << srv.response.plan.poses.at(i).pose.position.y << endl;
 
             }
         }
@@ -544,21 +567,6 @@ bool callPlanningService(ros::ServiceClient &serviceClient)
 
     return serviceOkay;
 }
-/*
-double OctomapListener::get_yaw_angle(double _x, double _y) {
-  double cur_pos_x, cur_pos_y, dir_point_x, dir_point_y;
-  cur_pos_x = odom_.pose.pose.position.x;
-  cur_pos_y = odom_.pose.pose.position.y;
-  dir_point_x = cur_pos_x + cos(robotYaw);
-  dir_point_y = cur_pos_y + sin(robotYaw);
-  double vector_org_to_dir_x, vector_org_to_dir_y, vector_org_to_target_x, vector_org_to_target_y;
-  vector_org_to_dir_x = dir_point_x - cur_pos_x;
-  vector_org_to_dir_y = dir_point_y - cur_pos_y;
-  vector_org_to_target_x = _x - cur_pos_x;
-  vector_org_to_target_y = _y - cur_pos_y;
-  return vector_org_to_dir_x * vector_org_to_target_y - vector_org_to_dir_y * vector_org_to_target_x;
-}
-*/
 
 
 double get_direction_yaw(double _x, double _y) {
@@ -626,6 +634,7 @@ double calculateDistance(double goalx, double goaly, geometry_msgs::PoseStamped 
     return substraction;
 }
 
+
 int moveForward(geometry_msgs::PoseStamped p){
     geometry_msgs::Twist twist_msg_tmp;
     twist_msg_tmp.linear.x = 0;
@@ -639,87 +648,7 @@ int moveForward(geometry_msgs::PoseStamped p){
     twist_msg_tmp.linear.x = 0.0;
     vel_pub.publish(twist_msg_tmp);
 }
- //if(firstMove == 1){
 
-void goForNextGoal(){
-    double robotx = robotX;
-    double roboty = robotY;
-    ros::Rate loop_rate(10);
-
-    if(tmpIndex < srv.response.plan.poses.size()){
-        //p = srv.response.plan.poses.at(i);
-        //cout << "poseX - poseY : "  << p.pose.position.x << "  -  " << p.pose.position.y << endl;
-        if(calculateDistance(robotx,roboty,srv.response.plan.poses.at(tmpIndex)) > 0.3 ){
-            p = srv.response.plan.poses.at(tmpIndex);
-            //cout << "poseX - poseY : "  << p.pose.position.x << "  -  " << p.pose.position.y << endl;
-            //cout << "robotYaw - goalYaw: " << robotYaw << "   -   "  << goalYaw <<  endl;
-            if(steps == 0){
-                _x =  p.pose.position.x ;
-                _y =  p.pose.position.y ;
-                vectorX = _x - robotX;
-                vectorY = _y - robotY;
-
-                goalYaw = atan(tan(vectorY/vectorX));
-
-                //cout << "poseX - poseY : "  << p.pose.position.x << "  -  " << p.pose.position.y << endl;
-                //cout << "robotYaw - goalYaw: " << robotYaw << "   -   "  << goalYaw <<  endl;
-
-                steps = 1;
-            }
-        }
-
-        if(steps == 1){
-            /*if(adjustDirectionYaw(goalX,goalY)){
-                steps = 2;
-                cout << "rotated" << endl;
-            }*/
-
-
-
-            if((goalYaw - robotYaw < -0.15)){
-                //double goalYaw = findGoalYaw(msg);
-                cout << " Hedef - robot yaw : " << goalYaw - robotYaw << endl;
-                vel.angular.z = -0.5;
-                vel_pub.publish(vel);
-                //ros::Duration(1).sleep();
-                //vel.angular.z = 0;
-                //vel_pub.publish(vel);
-            }else if((goalYaw - robotYaw > 0.15)){
-                //cout << " Hedef - robot yaw : " << goalYaw - robotYaw << endl;
-                vel.angular.z = 0.5;
-                vel_pub.publish(vel);
-                // ros::Duration(1).sleep();
-                // vel.angular.z = 0;
-                // vel_pub.publish(vel);
-            }else{
-                steps = 2;
-                vel.angular.z = 0;
-                vel_pub.publish(vel);
-            }
-
-        }
-
-        /*if(steps == 2){
-            double substraction = sqrt(pow((_x-robotX),2) + pow((_y-robotY),2));
-            cout << "Goal X - Y: " << _x << " - " << _y << endl;
-            cout << "Substraction: " << substraction << endl;
-            if(substraction > 0.10){
-                vel.linear.x = 0.15;
-                vel_pub.publish(vel);
-                //ros::Duration(1).sleep();
-                //vel.angular.x = 0;
-                //vel_pub.publish(vel);
-            }else{
-                vel.linear.x = 0;
-                vel_pub.publish(vel);
-                steps = 0;
-            }
-        }*/else if(calculateDistance(robotx,roboty,srv.response.plan.poses.at(tmpIndex)) < 0.3)
-            tmpIndex++;
-    }else
-        tmpIndex = 0;
-    loop_rate.sleep();
-}
 
 void computeGoals(const nav_msgs::OccupancyGrid::ConstPtr& msg){
 
@@ -778,14 +707,6 @@ void computeGoals(const nav_msgs::OccupancyGrid::ConstPtr& msg){
 
 }
 
-double findGoalYaw(){
-
-
-    double vectorX = p.pose.position.x - robotX;
-    double vectorY = p.pose.position.y - robotY;
-
-    return atan(tan(vectorY/vectorX));
-}
 
 void computeThread(){
 
@@ -793,14 +714,15 @@ void computeThread(){
     tf::TransformListener listener;
     tf::StampedTransform  transform;
 
-    ros::Rate loop_rate(10);
+    ros::Rate loop_rate(compute_loop_rate);
+
     while(ros::ok()){
         if(firstExp4){
             try {
                 /*listener.waitForTransform("/exp4_map", "/base_link", now, ros::Duration(3.0));
                 listener.lookupTransform("/exp4_map", "/base_link", now, transform);*/
-                listener.waitForTransform("/exp4_map", "/base_link", now, ros::Duration(2.0));
-                listener.lookupTransform("/exp4_map", "/base_link", now, transform);
+                listener.waitForTransform(map_topic, base_topic, now, ros::Duration(2.0));
+                listener.lookupTransform(map_topic, base_topic, now, transform);
             } catch (tf::TransformException ex) {
                 ROS_ERROR("%s",ex.what());
             }
@@ -818,9 +740,8 @@ void computeThread(){
 
 
             if(steps == 1){
-                if(calculateDistance(robotX,robotY,srv.response.plan.poses.at(tmpIndex)) > 0.4){
+                if(calculateDistance(robotX,robotY,srv.response.plan.poses.at(tmpIndex)) > treshold_to_goal){
                     p = srv.response.plan.poses.at(tmpIndex);
-                    goalYaw = findGoalYaw();
                     //cout << "poseX - poseY : "  << p.pose.position.x << "  -  " << p.pose.position.y << endl;
                     //cout << "robotYaw - goalYaw: " << robotYaw << "   -   "  << goalYaw <<  endl;
                     steps = 2;
@@ -834,7 +755,7 @@ void computeThread(){
             }
 
             if(steps == 2){
-                if((calculate_radians_forTurn(p.pose.position.x,p.pose.position.y) > 0.15)){
+                if((calculate_radians_forTurn(p.pose.position.x,p.pose.position.y) > angle_to_goal)){
                     //double goalYaw = findGoalYaw(msg);
                     //cout << " Hedef - robot yaw : " << goalYaw - robotYaw << endl;
                     vel.angular.z = get_direction_yaw(p.pose.position.x,p.pose.position.y) * 0.5;
@@ -852,7 +773,7 @@ void computeThread(){
                 double substraction = sqrt(pow((p.pose.position.x-robotX),2) + pow((p.pose.position.y-robotY),2));
                 //cout << "Goal X - Y: " << goalX << " - " << goalY << endl;
                 //cout << "Substraction: " << substraction << endl;
-                if(substraction > 0.15){
+                if(substraction > treshold_to_stop){
                     vel.linear.x = 0.2;
                     vel_pub.publish(vel);
                 }else{
@@ -865,7 +786,7 @@ void computeThread(){
 
         loop_rate.sleep();
     }
-
+    
 
 }
 
@@ -893,7 +814,7 @@ void moveBackGoal(){
 //Gerekli hesaplamalari yapip gol ureten callback
 void exp4Callback(const nav_msgs::OccupancyGrid::ConstPtr& msg){
 
-    cout << "Total area: " << totalArea << endl;
+    //cout << "Total area: " << totalArea << endl;
 
     width = msg->info.width;
     height = msg->info.height;
@@ -901,10 +822,10 @@ void exp4Callback(const nav_msgs::OccupancyGrid::ConstPtr& msg){
     map2DOrigX = msg->info.origin.position.x;//Matrisin 0,0 indisinin x koordinati
     map2DOrigY = msg->info.origin.position.y;//Matrisin 0,0 indisinin y koordinati
 
-    //cout << "header    : "  << msg->header.frame_id << endl;
-    //cout << "height-i  : "  << height << endl;
-    //cout << "width-j   : "  << width << endl;
-    /*cout << "resulotion: "    << res << endl;
+    /*cout << "header    : "  << msg->header.frame_id << endl;
+    cout << "height-i  : "  << height << endl;
+    cout << "width-j   : "  << width << endl;
+    cout << "resulotion: "    << res << endl;
     cout << "Matrixoriginx: "    << map2DOrigX  << endl;
     cout << "Matrixoriginy: "    << map2DOrigY << endl;*/
 
@@ -917,8 +838,8 @@ void exp4Callback(const nav_msgs::OccupancyGrid::ConstPtr& msg){
             try {
                 /*listener.waitForTransform("/exp4_map", "/base_link", now, ros::Duration(3.0));
                 listener.lookupTransform("/exp4_map", "/base_link", now, transform);*/
-                listener.waitForTransform("/exp4_map", "/base_link", now, ros::Duration(2.0));
-                listener.lookupTransform("/exp4_map", "/base_link", now, transform);
+                listener.waitForTransform(map_topic, base_topic, now, ros::Duration(2.0));
+                listener.lookupTransform(map_topic, base_topic, now, transform);
             } catch (tf::TransformException ex) {
                 ROS_ERROR("%s",ex.what());
             }
@@ -945,52 +866,6 @@ void exp4Callback(const nav_msgs::OccupancyGrid::ConstPtr& msg){
 
         }
    }
-
-
-    /*if(steps == 1){
-            if(calculateDistance(robotX,robotY,srv.response.plan.poses.at(tmpIndex)) > 0.4){
-                p = srv.response.plan.poses.at(tmpIndex);
-                goalYaw = findGoalYaw();
-                cout << "poseX - poseY : "  << p.pose.position.x << "  -  " << p.pose.position.y << endl;
-                cout << "robotYaw - goalYaw: " << robotYaw << "   -   "  << goalYaw <<  endl;
-                steps = 2;
-            }else
-                tmpIndex++;
-            if(tmpIndex >= srv.response.plan.poses.size()){
-                tmpIndex = 0;
-                steps = 0;
-            }
-
-        }
-
-        if(steps == 2){
-            if((calculate_radians_forTurn(p.pose.position.x,p.pose.position.y) > 0.10)){
-                //double goalYaw = findGoalYaw(msg);
-                //cout << " Hedef - robot yaw : " << goalYaw - robotYaw << endl;
-                vel.angular.z = get_direction_yaw(p.pose.position.x,p.pose.position.y) * 0.5;
-                vel_pub.publish(vel);
-            }else{
-                steps = 3;
-                vel.angular.z = 0;
-                vel_pub.publish(vel);
-            }
-
-        }
-
-
-        if(steps == 3){
-            double substraction = sqrt(pow((p.pose.position.x-robotX),2) + pow((p.pose.position.y-robotY),2));
-            cout << "Goal X - Y: " << goalX << " - " << goalY << endl;
-            cout << "Substraction: " << substraction << endl;
-            if(substraction > 0.15){
-                vel.linear.x = 0.2;
-                vel_pub.publish(vel);
-            }else{
-                vel.linear.x = 0;
-                vel_pub.publish(vel);
-                steps = 1;
-            }
-        }*/
 
 }
 
@@ -1050,27 +925,50 @@ int main(int argc, char** argv)
 
     ros::init(argc, argv, "navigator_exp4");
     ros::NodeHandle n;
-    //ros::NodeHandle nh;
     //int test = 11;
+    ros::NodeHandle nh("~");
 
-    //ROS_INFO("lastAreaThreshold %d",lastAreaThreshold);
-
-   // n.param("lastAreaThreshold",lastAreaThreshold, 200);
-
-    //ROS_INFO("lastAreaThreshold %d",lastAreaThreshold);
-
-    //nh.getParam("lastAreaThreshold",test);
-
-    //ROS_INFO("lastAreaThreshold %d",test);
+    nh.getParam("lastAreaThreshold",lastAreaThreshold);
+    cout << "lastAreaThreshold : " << lastAreaThreshold << endl;
+    nh.getParam("service_name",service_name);
+    cout << "service_name : " << service_name << endl;
+    nh.getParam("distan",distan);
+    ROS_INFO("distan %.3f",distan);
+    nh.getParam("picture_place",picture_place);
+    cout << "picture_place : " << picture_place << endl;
+    nh.getParam("map_topic",map_topic);
+    cout << "map_topic : " << map_topic << endl;
+    nh.getParam("base_topic",base_topic);
+    cout << "base_topic : " << base_topic << endl;
+    nh.getParam("cmd_topic",cmd_topic);
+    cout << "cmd_topic : " << cmd_topic << endl;
+    nh.getParam("status_topic",status_topic);
+    cout << "status_topic : " << status_topic << endl;
+    nh.getParam("cancel_topic",cancel_topic);
+    cout << "cancel_topic : " << cancel_topic << endl;
+	nh.getParam("compute_loop_rate",compute_loop_rate);
+    cout << "compute_loop_rate : " << compute_loop_rate << endl;
+	nh.getParam("treshold_to_goal",treshold_to_goal);
+    ROS_INFO("treshold_to_goal: %.3f",treshold_to_goal);
+    nh.getParam("treshold_to_stop",treshold_to_stop);
+    ROS_INFO("treshold_to_stop: %.3f",treshold_to_stop);
+    nh.getParam("angle_to_goal",angle_to_goal);
+    ROS_INFO("angle_to_goal: %.3f",angle_to_goal);
+    nh.getParam("picture_name",picture_name);
+    cout << "picture_name : " << picture_name << endl;
+    nh.getParam("paint_robot_coords",paint_robot_coords);
+    cout << "paint_robot_coords : " << paint_robot_coords << endl;
+    nh.getParam("paint_file",paint_file);
+    cout <<"paint_file : " << paint_file << endl;
 
     serviceClient = n.serviceClient<nav_msgs::GetPlan>(service_name, true);
 
     first_moved_sub = n.subscribe("/first_moved",1,firstMovedCallback);
     exp4_map_sub    = n.subscribe("/exp4_map", 1, exp4Callback);
     goal_sender     = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 1);
-    goal_canceler   = n.advertise<actionlib_msgs::GoalID>("/move_base/cancel",1);
-    status_sub      = n.subscribe("/move_base/status", 1, statusCallback);
-    vel_pub         = n.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
+    goal_canceler   = n.advertise<actionlib_msgs::GoalID>(cancel_topic,1);
+    status_sub      = n.subscribe(status_topic, 1, statusCallback);
+    vel_pub         = n.advertise<geometry_msgs::Twist>(cmd_topic, 10);
     std::thread goal_thread(computeThread);
     //ros::spin();
     ros::AsyncSpinner spinner(4);
