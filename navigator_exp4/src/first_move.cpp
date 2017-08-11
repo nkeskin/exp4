@@ -21,7 +21,6 @@ int     width,height;
 double  res,map2DOrigX,map2DOrigY;
 double  robotX,robotY,robotYaw,goalX,goalY;
 int     robotIIndex,robotJIndex;
-double  distan = 1.5; // Taranacak alanin yari genişliği, cok yuksek olmasi durumunda seg_fault verebilmektedir
 double  X1,X2,X3,X4; //Alan taramai icin gerekli degiskenler
 double  Y1,Y2,Y3,Y4; // Alan taramai icin gerekli degiskenler
 int     x1_j,x2_j,x3_j,x4_j; //Alan taramai icin gerekli degiskenler
@@ -32,6 +31,18 @@ int     indexJ[4] = {0}; //Robota hedef vermek icin tutulan j indislerinin topla
 int     steps = 0;
 double  goalYaw = 0;
 double  tmpYaw = 0;
+
+double  distan = 1.5; // Taranacak alanin yari genişliği
+string  picture_place = "/home/exp4/catkin_ws/src/navigator_exp4";
+int     turn_time = 15;
+int     first_move_loop_rate = 10;
+double  treshold_to_stop = 0.15;
+double  angle_to_goal = 0.1;
+string  picture_name = "first_sim.pgm";
+bool    paint_file = true;
+string  map_topic = "/exp4_map";
+string  base_topic = "/robot0/base_link";
+string  cmd_topic = "/robot0/cmd_vel";
 
 //x eksinden gelen metre bilgisini x ekseninde indise ceviren fonksiyon
 int convertToIndexJ(double xMeter){
@@ -247,7 +258,8 @@ int findMaxArea(){
 
 //Haritayi, hedefleri ve alan taramasini resim olarak yazdiran fonksiyon
 void paintFile(int **map){
-    FILE *f = fopen("/home/monster/catkin_ws/src/navigator_exp4/first.pgm", "wb");
+    string picture = picture_place + picture_name;
+    FILE *f = fopen(picture.c_str(), "wb");
     fprintf(f, "P6\n%i %i 255\n", width, height);
 
     for (int i=0; i<height; i++){
@@ -336,7 +348,7 @@ double calculate_radians_forTurn(double _x, double _y) {
     return radians_to_turn;
 }
 
-double findGoalYaw(const nav_msgs::OccupancyGrid::ConstPtr& msg){
+void findGoalYaw(const nav_msgs::OccupancyGrid::ConstPtr& msg){
     findCoordinates();
 
     int sayac = 0;
@@ -379,7 +391,8 @@ double findGoalYaw(const nav_msgs::OccupancyGrid::ConstPtr& msg){
         indexJ[i] = 0;
     }
 
-    paintFile(mapData);
+    if(paint_file)
+        paintFile(mapData);
 
     for(int i = 0; i < height; i++) {
         delete [] mapData[i];
@@ -391,14 +404,10 @@ double findGoalYaw(const nav_msgs::OccupancyGrid::ConstPtr& msg){
         indexJ[i] = 0;
     }
 
-    double vectorX = goalX - robotX;
-    double vectorY = goalY - robotY;
-
-    return atan(tan(vectorY/vectorX));
 }
 
 void transformThread(){
-    ros::Rate loop_rate(10);
+    ros::Rate loop_rate(first_move_loop_rate);
 
     while(ros::ok()){
         tf::TransformListener listener;
@@ -407,8 +416,8 @@ void transformThread(){
         ros::Time now = ros::Time(0);
 
         try {
-            listener.waitForTransform("/exp4_map", "/base_link", now, ros::Duration(2.0));
-            listener.lookupTransform("/exp4_map", "/base_link", now, transform);
+            listener.waitForTransform(map_topic, base_topic, now, ros::Duration(2.0));
+            listener.lookupTransform(map_topic, base_topic, now, transform);
         } catch (tf::TransformException ex) {
             ROS_ERROR("%s",ex.what());
         }
@@ -418,7 +427,7 @@ void transformThread(){
         robotX = transform.getOrigin().x();//robotun x eksenindeki metrik bilgisi
         robotY = transform.getOrigin().y();//robotun y eksenindeki metrik bilgisi
         robotYaw = tf::getYaw(transform.getRotation());
-        cout << "X-Y-Yaw : " << "  -  " << robotX << "   -   " << robotY << "  -  " << robotYaw << endl;
+        //cout << "X-Y-Yaw : " << "  -  " << robotX << "   -   " << robotY << "  -  " << robotYaw << endl;
 
         robotIIndex = convertToIndexI(robotY);
         robotJIndex = convertToIndexJ(robotX);
@@ -432,7 +441,7 @@ void firstMoveThread(){
 
     //tf::TransformListener listener;
     //tf::StampedTransform  transform;
-    ros::Rate loop_rate(10);
+    ros::Rate loop_rate(first_move_loop_rate);
 
     ros::Time now = ros::Time(0);
 
@@ -462,18 +471,18 @@ void firstMoveThread(){
 
     while(ros::ok()){
         if(steps == 0){
-            if(tmpYaw < 10){
+            if(tmpYaw < turn_time){
                 vel.angular.z = 0.5;
                 vel_pub.publish(vel);
                 tmpYaw+=0.5;
                 ros::Duration(1).sleep();
                 vel.angular.z = 0;
                 vel_pub.publish(vel);
-                cout << tmpYaw << endl;
+                //cout << tmpYaw << endl;
             }else{
                 tmpYaw = 0;
                 steps++;
-                cout  << "Steps : " << steps << endl;
+                //cout  << "Steps : " << steps << endl;
                 vel.angular.z = 0;
                 vel_pub.publish(vel);
             }
@@ -481,9 +490,9 @@ void firstMoveThread(){
 
 
         if(steps == 2){
-            if((calculate_radians_forTurn(goalX,goalY) > 0.15)){
+            if((calculate_radians_forTurn(goalX,goalY) > angle_to_goal)){
                 //double goalYaw = findGoalYaw(msg);
-                cout << " Hedef - robot yaw : " << goalYaw - robotYaw << endl;
+                //cout << " Hedef - robot yaw : " << goalYaw - robotYaw << endl;
                 vel.angular.z = get_direction_yaw(goalX,goalY) * 0.5;
                 vel_pub.publish(vel);
                 ros::Duration(1).sleep();
@@ -491,7 +500,7 @@ void firstMoveThread(){
                 vel_pub.publish(vel);
             }else{
                 steps++;
-                cout  << "Steps : " << steps << endl;
+                //cout  << "Steps : " << steps << endl;
                 vel.angular.z = 0;
                 vel_pub.publish(vel);
             }
@@ -501,9 +510,9 @@ void firstMoveThread(){
 
         if(steps == 3){
             double substraction = sqrt(pow((goalX-robotX),2) + pow((goalY-robotY),2));
-            cout << "Goal X - Y: " << goalX << " - " << goalY << endl;
-            cout << "Substraction: " << substraction << endl;
-            if(substraction > 0.15){
+            //cout << "Goal X - Y: " << goalX << " - " << goalY << endl;
+            //cout << "Substraction: " << substraction << endl;
+            if(substraction > treshold_to_stop){
                 vel.linear.x = 0.25;
                 vel_pub.publish(vel);
                 ros::Duration(1).sleep();
@@ -513,14 +522,14 @@ void firstMoveThread(){
                 vel.linear.x = 0;
                 vel_pub.publish(vel);
                 steps++;
-                cout  << "Steps : " << steps << endl;
+                //cout  << "Steps : " << steps << endl;
 
             }
 
         }
 
         if(steps == 4){
-            if(tmpYaw < 10){
+            if(tmpYaw < turn_time){
                 vel.angular.z = 0.50;
                 vel_pub.publish(vel);
                 tmpYaw+=0.5;
@@ -532,18 +541,16 @@ void firstMoveThread(){
                 vel_pub.publish(vel);
                 tmpYaw = 0;
                 steps++;
-                cout  << "Steps : " << steps << endl;
+                //cout  << "Steps : " << steps << endl;
 
             }
         }
 
-        if(steps > 4 && steps < 20){
+        if(steps > 4){
             first_moved.data = 1;
             first_moved_pub.publish(first_moved);
             steps++;
-            cout  << "Steps : " << steps << endl;
-        }else if(steps > 20){
-            exit(0);
+            //cout  << "Steps : " << steps << endl;
         }
 
         loop_rate.sleep();
@@ -570,11 +577,10 @@ void exp4Callback(const nav_msgs::OccupancyGrid::ConstPtr& msg){
     cout << "Matrixoriginy: "    << map2DOrigY << endl;*/
 
 
-
     if(steps == 1){
-        goalYaw = findGoalYaw(msg);
+        findGoalYaw(msg);
         steps++;
-        cout  << "Steps : " << steps << endl;
+        //cout  << "Steps : " << steps << endl;
     }
 }
 
@@ -583,7 +589,32 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "first_move");
     ros::NodeHandle n;
 
-    vel_pub = n.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
+    ros::NodeHandle nh("~");
+
+    nh.getParam("distan",distan);
+    ROS_INFO("distan %.3f",distan);
+    nh.getParam("turn_time",turn_time);
+    cout << "turn_time : " << turn_time << endl;
+    nh.getParam("picture_place",picture_place);
+    cout << "picture_place : " << picture_place << endl;
+    nh.getParam("map_topic",map_topic);
+    cout << "map_topic : " << map_topic << endl;
+    nh.getParam("base_topic",base_topic);
+    cout << "base_topic : " << base_topic << endl;
+    nh.getParam("cmd_topic",cmd_topic);
+    cout << "cmd_topic : " << cmd_topic << endl;
+    nh.getParam("first_move_loop_rate",first_move_loop_rate);
+    cout << "first_move_loop_rate : " << first_move_loop_rate << endl;
+    nh.getParam("treshold_to_stop",treshold_to_stop);
+    ROS_INFO("treshold_to_stop: %.3f",treshold_to_stop);
+    nh.getParam("angle_to_goal",angle_to_goal);
+    ROS_INFO("angle_to_goal: %.3f",angle_to_goal);
+    nh.getParam("picture_name",picture_name);
+    cout << "picture_name : " << picture_name << endl;
+    nh.getParam("paint_file",paint_file);
+    cout <<"paint_file : " << paint_file << endl;
+
+    vel_pub = n.advertise<geometry_msgs::Twist>(cmd_topic, 10);
     first_moved_pub = n.advertise<std_msgs::Int8>("/first_moved",10);
     exp4_sub = n.subscribe("/exp4_map", 10, exp4Callback);
     std::thread first_thread(firstMoveThread);
