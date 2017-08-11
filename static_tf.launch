@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+<node pkg="tf" type="static_transform_publisher" name="static_tf_1" args="0.0 0.0 0.0 0.0 0.0 0    map astar    100" />
+<node pkg="tf" type="static_transform_publisher" name="static_tf_2" args="0.0 0.0 0.0 0.0 0.0 0    map world    100" />
+<node pkg="tf" type="static_transform_publisher" name="static_tf_3" args="0.1 0.0 0.60 0.0 0.43 0  base_link camera_link 100" />
+
+</launch>
+
+

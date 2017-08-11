@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+ <node pkg="navigator_exp4" type="navigator" name="navigator" output="screen">
+    <rosparam file="$(find navigator_exp4)/params/nav.yaml" command="load" />
+ </node>
+
+</launch>

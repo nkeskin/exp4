@@ -1,0 +1,11 @@
+distan: 1.5
+first_move_loop_rate: 10
+turn_time: 10
+angle_to_goal: 0.15
+treshold_to_stop: 0.15
+paint_file: false
+map_topic: '/exp4_map'
+base_topic: '/base_link'
+cmd_topic:  '/cmd_vel'
+picture_name: 'first.pgm'
+picture_place: '/home/exp4/catkin_ws/src/navigator_exp4/'

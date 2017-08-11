@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+ <node pkg="navigator_exp4" type="first_move" name="first_move" output="screen">
+    <rosparam file="$(find navigator_exp4)/params/first_move.yaml" command="load" />
+ </node>
+
+</launch>

@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+  <!--include file = "$(find navigator_exp4)/launch/mapping_for_bag.launch" /-->
+  <include file = "$(find navigator_exp4)/launch/static_bag_tf.launch" />
+  <include file = "$(find navigator_exp4)/launch/pcl_passthrough.launch" />
+  <include file = "$(find octomap_server)/launch/octomap_mapping.launch" />		 
+  <node name="modelvisualisation"  pkg="rviz" type="rviz" output="screen" />
+  <include file = "$(find navigator_exp4)/launch/exp4.launch" />
+  <include file = "$(find move_base)/numan_move_base.launch" />
+  <!--node name="rgbScanner" pkg="rgb_scanning" type="rgbScanner" /-->
+  <!--node name="navigator" pkg="navigator_exp4" type="navigator" respawn="true"/-->
+  <!--node name="joy_node" pkg="joy" type="joy_node" args="_dev:=/dev/input/js0" /-->
+  <!--node name="robot_teleop" pkg="robot_joy" type="robot_teleop" /-->
+  <!--node name="first_move" pkg="navigator_exp4" type="first_move" /-->
+</launch>

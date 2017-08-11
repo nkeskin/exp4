@@ -1,0 +1,16 @@
+lastAreaThreshold: 115
+distan: 1.5
+compute_loop_rate: 10
+treshold_to_goal: 0.4
+angle_to_goal: 0.1
+treshold_to_stop: 0.2
+paint_file: false
+paint_robot_coords: false
+picture_name: 'out.pgm'
+map_topic: '/exp4_map'
+base_topic: '/robot0/base_link'
+cmd_topic:  '/robot0/cmd_vel'
+cancel_topic: '/robot0/move_base_cancel'
+status_topic: '/robot0/move_base/status'
+service_name: '/robot0/move_base_node/NavfnROS/make_plan'
+picture_place: '/home/exp4/catkin_ws/src/navigator_exp4/'

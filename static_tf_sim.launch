@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+<node pkg="tf" type="static_transform_publisher" name="static_tf_sim_1" args="0.1 0.0 0.60 0.0 0.43 0  robot0/base_link robot0/camera_depth_optical_frame 100" />
+
+</launch>
+
+

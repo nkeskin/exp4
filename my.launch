@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+  <include file = "$(find p3at_description)/launch/tek_robot_rescue.launch" />
+  <!--include file = "$(find p3at_description)/launch/deneme.launch" /-->
+  <include file = "$(find p3at_description)/launch/multirobot_mapping.launch" />
+  <include file = "$(find octomap_server)/launch/octomap_mapping_simulation.launch" />		 
+  <node name="modelvisualisation"  pkg="rviz" type="rviz" output="screen" />
+  <!--node name="modelvisualisation2" pkg="rviz" type="rviz" output="screen" /!-->
+  <!--node name="octomap_to_2Dmap" pkg="exp4_otonom" type="octomap_to_2Dmap" respawn="true"/-->
+  <include file = "$(find navigator_exp4)/launch/exp4.launch" />
+  <include file = "$(find navigator_exp4)/launch/first_move_sim.launch" />
+  <include file = "$(find move_base)/move_base_frontier_simulation.launch" />
+  <!--node name="rgbScanner" pkg="rgb_scanning" type="rgbScanner" /-->
+  <!--node name="first_move" pkg="navigator_exp4" type="first_move" /-->
+  <!--node name="navigator" pkg="navigator_exp4" type="navigator" /-->
+  <node name="joy_node" pkg="joy" type="joy_node" args="_dev:=/dev/input/js0" />
+  <node name="robot_teleop" pkg="robot_joy" type="robot_teleop" /> 
+ 
+</launch>
